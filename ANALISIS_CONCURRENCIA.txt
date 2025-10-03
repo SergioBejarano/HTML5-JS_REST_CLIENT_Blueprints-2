@@ -1,0 +1,26 @@
+Posibles condiciones de carrera
+1. Añadir nuevos planos (POST /blueprints)
+Si dos clientes intentan guardar un plano con el mismo nombre y autor al mismo tiempo, puede pasar que:
+-Ambos verifiquen si ya existe el plano y no lo encuentren.
+-Ambos intenten guardarlo al mismo tiempo.
+-El resultado sea que se sobrescriba un plano o se produzcan errores poco consistentes.
+
+2. Actualizar planos (PUT /blueprints/{author}/{bpname})
+Cuando varios clientes actualizan el mismo plano de manera simultánea:
+-Una actualización puede sobrescribir la otra, perdiendo información.
+-También se pueden dar lecturas inconsistentes de los puntos del plano.
+
+3. Consultar todos los planos (GET /blueprints)
+Aquí el problema no es tan grave, pero si se consulta mientras otro hilo está actualizando, la respuesta puede traer datos a medio modificar o inconsistentes.
+
+Regiones críticas identificadas
+Las partes del código donde se pueden presentar problemas de concurrencia son:
+saveBlueprint(): Accede y modifica la colección de planos compartida.
+getBlueprint(): Lee la colección, y si se combina con saveBlueprint() sin control, puede devolver datos inconsistentes.
+updateBlueprint(): Modifica los puntos de un plano, y si se hace en paralelo, puede sobrescribir cambios de otro hilo.
+
+Solución aplicada
+
+1. Cambiamos HashMap por ConcurrentHashMap, ya que permite múltiples lecturas al mismo tiempo sin bloquear, y además maneja mejor la concurrencia en escrituras.
+2. Para evitar que dos hilos creen el mismo plano simultáneamente, usamos putIfAbsent(), que inserta el plano solo si la clave todavía no existe.
+3. En cuanto a las lecturas, ConcurrentHashMap ya asegura operaciones seguras sin necesidad de bloqueos adicionales, así que no fue necesario modificar getBlueprint().
