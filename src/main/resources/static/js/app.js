@@ -3,6 +3,9 @@ var app = (function() {
     var selectedAuthor = "";
     var blueprintsList = [];
     var api = apimock;
+    var currentBlueprint = null; // { author, name, points: [ {x,y}, ... ] }
+    var canvasEl = null;
+    var ctx = null;
 
     return {
 
@@ -102,37 +105,53 @@ var app = (function() {
             console.log(`Dibujando blueprint: ${bpname} de ${author}`);
 
             api.getBlueprintsByNameAndAuthor(author, bpname, function (blueprint) {
-                if (!blueprint || !Array.isArray(blueprint.points) || blueprint.points.length === 0) {
-                    console.log("No se encontraron puntos en el blueprint.");
-                    $("#blueprint-title").text("No points to draw for: " + bpname);
+                if (!blueprint) {
+                    console.log("No se encontró el blueprint.");
+                    $("#blueprint-title").text("No blueprint found: " + bpname);
                     return;
                 }
 
-                $("#blueprint-title").text(`Current blueprint: ${bpname}`);
+                currentBlueprint = {
+                    author: blueprint.author || author,
+                    name: blueprint.name || bpname,
+                    points: Array.isArray(blueprint.points) ? blueprint.points.slice() : []
+                };
 
-                var canvas = document.getElementById("myCanvas");
-                if (!canvas) {
-                    console.error("Canvas 'myCanvas' no encontrado en el DOM.");
-                    return;
+                $("#blueprint-title").text(`Current blueprint: ${currentBlueprint.name}`);
+
+                if (!canvasEl) {
+                    canvasEl = document.getElementById("myCanvas");
+                    if (!canvasEl) {
+                        console.error("Canvas 'myCanvas' no encontrado en el DOM.");
+                        return;
+                    }
+                    ctx = canvasEl.getContext("2d");
                 }
 
-                var ctx = canvas.getContext("2d");
-                // Limpiar canvas
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-                var points = blueprint.points;
-
-                // Dibujo de la línea que conecta los puntos en orden
-                ctx.beginPath();
-                ctx.lineWidth = 2;
-                ctx.strokeStyle = "#000"; // negro por defecto
-                ctx.moveTo(points[0].x, points[0].y);
-
-                for (var i = 1; i < points.length; i++) {
-                    ctx.lineTo(points[i].x, points[i].y);
-                }
-                ctx.stroke();
+                // Dibujar el blueprint desde la memoria
+                app.repaint();
             });
+        },
+
+        // Volver a dibujar el plano actual en el lienzo a partir de sus puntos en memoria
+        repaint: function() {
+            if (!currentBlueprint || !canvasEl || !ctx) return;
+
+            // Limpiar canvas
+            ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+
+            var pts = currentBlueprint.points;
+            if (!pts || pts.length === 0) return;
+
+            // Dibujar líneas conectando los puntos
+            ctx.beginPath();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = "#000";
+            ctx.moveTo(pts[0].x, pts[0].y);
+            for (var i = 1; i < pts.length; i++) {
+                ctx.lineTo(pts[i].x, pts[i].y);
+            }
+            ctx.stroke();
         },
 
         setApi: function(newApi) {
@@ -157,6 +176,46 @@ var app = (function() {
                     }
                 }
             });
+
+                // Inicializar referencias al canvas y asociar eventos de click/touch
+                canvasEl = document.getElementById("myCanvas");
+                if (canvasEl) {
+                    
+                    function getCanvasPoint(evt) {
+                        var rect = canvasEl.getBoundingClientRect();
+                        var clientX, clientY;
+                        if (evt.touches && evt.touches.length > 0) {
+                            clientX = evt.touches[0].clientX;
+                            clientY = evt.touches[0].clientY;
+                        } else if (evt.changedTouches && evt.changedTouches.length > 0) {
+                            clientX = evt.changedTouches[0].clientX;
+                            clientY = evt.changedTouches[0].clientY;
+                        } else {
+                            clientX = evt.clientX;
+                            clientY = evt.clientY;
+                        }
+                        var x = clientX - rect.left;
+                        var y = clientY - rect.top;
+                        return { x: x, y: y };
+                    }
+
+                    canvasEl.addEventListener('click', function (evt) {
+                        if (!currentBlueprint) return; 
+                        var p = getCanvasPoint(evt);
+                        currentBlueprint.points.push({ x: p.x, y: p.y });
+                        app.repaint();
+                    });
+
+                    canvasEl.addEventListener('touchstart', function (evt) {
+                        evt.preventDefault();
+                        if (!currentBlueprint) return;
+                        var p = getCanvasPoint(evt);
+                        currentBlueprint.points.push({ x: p.x, y: p.y });
+                        app.repaint();
+                    }, { passive: false });
+
+                    ctx = canvasEl.getContext('2d');
+                }
         }
     };
 
