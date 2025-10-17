@@ -112,4 +112,16 @@ public class BlueprintsServices {
         }
         bpp.updateBlueprint(author, name, updatedBlueprint);
     }
+
+    /**
+     * Deletes a blueprint by its author and name.
+     * Calls the persistence layer to remove the blueprint.
+     *
+     * @param author The name of the blueprint's author.
+     * @param name The name of the blueprint.
+     * @throws BlueprintNotFoundException If the blueprint does not exist.
+     */
+    public void deleteBlueprint(String author, String name) throws BlueprintNotFoundException {
+        bpp.deleteBlueprint(author, name);
+    }
 }

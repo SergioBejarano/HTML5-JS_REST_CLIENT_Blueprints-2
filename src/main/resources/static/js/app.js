@@ -2,10 +2,11 @@ var app = (function() {
 
     var selectedAuthor = "";
     var blueprintsList = [];
-    var api = apimock;
+    var api = apiclient;
     var currentBlueprint = null; // { author, name, points: [ {x,y}, ... ] }
     var canvasEl = null;
     var ctx = null;
+    var isNewBlueprint = false;
 
     return {
 
@@ -154,6 +155,151 @@ var app = (function() {
             ctx.stroke();
         },
 
+        saveOrUpdateBlueprint: function() {
+            if (!selectedAuthor) {
+                console.log("No hay un autor seleccionado para guardar.");
+                alert("Please select an author before saving.");
+                return;
+            }
+
+            if (!currentBlueprint || !currentBlueprint.name) {
+                let newName = prompt("Enter the new blueprint name:");
+                if (!newName || newName.trim() === "") {
+                    console.log("No se proporcionó un nombre de blueprint válido.");
+                    alert("Invalid blueprint name.");
+                    return;
+                }
+                currentBlueprint = {
+                    author: selectedAuthor,
+                    name: newName.trim(),
+                    points: currentBlueprint?.points || []
+                };
+                isNewBlueprint = true;
+                $("#blueprint-title").text(`Current blueprint: ${currentBlueprint.name}`);
+                alert(`New blueprint created: ${currentBlueprint.name}`);
+            }
+
+            if (!Array.isArray(currentBlueprint.points)) {
+                currentBlueprint.points = [];
+            }
+
+            let blueprintData = {
+                author: selectedAuthor,
+                name: currentBlueprint.name,
+                points: currentBlueprint.points
+            };
+
+            console.log("Guardando blueprint:", blueprintData);
+
+            let url, requestType;
+
+            if (isNewBlueprint) {
+                url = `http://localhost:8081/blueprints`;
+                requestType = "POST";
+            } else {
+                url = `http://localhost:8081/blueprints/${selectedAuthor}/${currentBlueprint.name}`;
+                requestType = "PUT";
+            }
+
+            $.ajax({
+                url: url,
+                type: requestType,
+                data: JSON.stringify(blueprintData),
+                contentType: "application/json"
+            })
+                .then(() => {
+                    console.log("Blueprint guardado correctamente.");
+                    alert("Blueprint saved successfully.");
+                    return $.get(`http://localhost:8081/blueprints/${selectedAuthor}`);
+                })
+                .then(() => {
+                    app.updateBlueprintsList(selectedAuthor);
+                    isNewBlueprint = false;
+                })
+                .catch((error) => {
+                    console.error("Error al guardar el blueprint:", error);
+                    alert("An error occurred while saving the blueprint.");
+                });
+        },
+
+        createNewBlueprint: function() {
+            if (!selectedAuthor) {
+                alert("Please select an author before creating a new blueprint.");
+                console.log("Debe seleccionar un autor antes de crear un nuevo blueprint.");
+                return;
+            }
+
+            let blueprintName = prompt("Enter the new blueprint name:");
+
+            if (!blueprintName || blueprintName.trim() === "") {
+                alert("Invalid blueprint name.");
+                console.log("Nombre de blueprint inválido.");
+                return;
+            }
+
+            if (!canvasEl) {
+                canvasEl = document.getElementById("myCanvas");
+                if (!canvasEl) {
+                    console.error("Canvas 'myCanvas' no encontrado.");
+                    return;
+                }
+                ctx = canvasEl.getContext("2d");
+            }
+
+            ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+
+            currentBlueprint = {
+                author: selectedAuthor,
+                name: blueprintName.trim(),
+                points: []
+            };
+            isNewBlueprint = true;
+
+            $("#blueprint-title").text(`Current blueprint: ${currentBlueprint.name}`);
+            alert(`New blueprint created: ${currentBlueprint.name}`);
+            console.log("Nuevo blueprint creado:", currentBlueprint);
+        },
+
+        deleteBlueprint: function() {
+            if (!selectedAuthor || !currentBlueprint || !currentBlueprint.name) {
+                console.log("No hay un blueprint seleccionado para eliminar.");
+                alert("Please select a blueprint before deleting.");
+                return;
+            }
+
+            let confirmDelete = confirm(`Are you sure you want to delete the blueprint "${currentBlueprint.name}"?`);
+            if (!confirmDelete) return;
+
+            let url = `http://localhost:8081/blueprints/${selectedAuthor}/${currentBlueprint.name}`;
+
+            $.ajax({
+                url: url,
+                type: "DELETE",
+                contentType: "application/json"
+            })
+                .then(() => {
+                    console.log("Blueprint eliminado correctamente.");
+                    alert("Blueprint deleted successfully.");
+
+                    currentBlueprint = null;
+
+                    if (canvasEl && ctx) {
+                        ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+                    }
+
+                    $("#blueprint-title").text("Current blueprint: none");
+
+                    return $.get(`http://localhost:8081/blueprints/${selectedAuthor}`);
+                })
+                .then(() => {
+                    app.updateBlueprintsList(selectedAuthor);
+                })
+                .catch((error) => {
+                    console.error("Error al eliminar el blueprint:", error);
+                    alert("An error occurred while deleting the blueprint.");
+                });
+        },
+
         setApi: function(newApi) {
             api = newApi;
         },
@@ -175,6 +321,21 @@ var app = (function() {
                         app.updateBlueprintsList(authorName.trim());
                     }
                 }
+            });
+
+            // Asociar con saveOrUpdateBlueprint
+            $("#btn-save-blueprints").click(function() {
+                app.saveOrUpdateBlueprint();
+            });
+
+            // Asocia con createNewBlueprint
+            $("#btn-new-blueprint").click(function() {
+                app.createNewBlueprint();
+            });
+
+            // Asociar con deleteBlueprint
+            $("#btn-delete-blueprint").click(function() {
+                app.deleteBlueprint();
             });
 
                 // Inicializar referencias al canvas y asociar eventos de click/touch
